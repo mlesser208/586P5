@@ -1,0 +1,61 @@
+# Streamlit Deployment Guide
+
+## 🚀 Quick Start
+
+### 1. Test Locally First
+
+Run the app locally to make sure everything works:
+
+```bash
+streamlit run streamlit_map.py
+```
+
+This will open your browser automatically at `http://localhost:8501`
+
+### 2. Deploy to Streamlit Cloud
+
+#### Step 1: Push to GitHub
+Make sure your code is in a GitHub repository:
+- `streamlit_map.py` (main app file)
+- `requirements.txt` (dependencies)
+- `project5_outputs/combined_housing_west_la.csv` (data file)
+
+#### Step 2: Connect to Streamlit Cloud
+1. Go to https://share.streamlit.io/
+2. Sign in with your GitHub account
+3. Click "New app"
+4. Select your repository
+5. Set the main file path to: `streamlit_map.py`
+6. Click "Deploy"
+
+#### Step 3: Wait for Deployment
+Streamlit Cloud will:
+- Install dependencies from `requirements.txt`
+- Run your app
+- Give you a public URL (e.g., `https://your-app-name.streamlit.app`)
+
+## 📁 Required Files for Deployment
+
+Make sure these files are in your GitHub repo:
+- ✅ `streamlit_map.py` - Main app
+- ✅ `requirements.txt` - Dependencies
+- ✅ `project5_outputs/combined_housing_west_la.csv` - Data file
+
+## 🔧 Troubleshooting
+
+### If the app doesn't load:
+- Check that `combined_housing_west_la.csv` is in the `project5_outputs/` folder
+- Verify all dependencies are in `requirements.txt`
+- Check the Streamlit Cloud logs for errors
+
+### If the map is slow:
+- The app uses caching (`@st.cache_data`) to speed up data loading
+- Marker clustering helps with performance
+- Consider filtering data if needed
+
+## 📝 Notes
+
+- The app is free on Streamlit Cloud
+- Your data stays private (only you can see it unless you make the repo public)
+- Updates automatically when you push to GitHub
+
