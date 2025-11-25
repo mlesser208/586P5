@@ -281,10 +281,9 @@ else:
                         st.error("❌ Map object is None after creation!")
                     else:
                         # Display the map using st_folium
-                        # Try using use_container_width for better responsiveness
+                        # Use use_container_width for better responsiveness
                         map_data = st_folium(
                             map_obj, 
-                            width=None,  # Let it use container width
                             height=600, 
                             returned_objects=["last_object_clicked"], 
                             key="housing_map",
