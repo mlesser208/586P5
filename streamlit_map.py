@@ -51,6 +51,11 @@ def load_data():
     
     df = pd.read_csv(csv_path, low_memory=False)
     
+    # Make sure key numeric columns are numeric
+    for col in ["lat", "lon", "price", "beds", "baths"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    
     # Check for required columns
     if "lat" not in df.columns or "lon" not in df.columns:
         raise KeyError(f"Required columns 'lat' and/or 'lon' not found. Available columns: {list(df.columns)}")
@@ -97,8 +102,15 @@ def format_popup_html(row: pd.Series) -> str:
     tooltip_parts.append(f"<i>Source: {source}</i>")
     
     # Price
-    if pd.notna(row.get("price")) and row.get("price") != "":
-        tooltip_parts.append(f"Price: ${row['price']:.2f}")
+    price = row.get("price")
+    try:
+        if pd.notna(price) and str(price).strip() != "":
+            # convert to float safely
+            price_val = float(str(price).replace("$", "").replace(",", ""))
+            tooltip_parts.append(f"Price: ${price_val:,.0f}")
+    except (TypeError, ValueError):
+        # If we can't parse it, just skip showing price
+        pass
     
     # Beds/Baths
     bed_bath = []
@@ -282,13 +294,21 @@ else:
                     else:
                         # Display the map using st_folium
                         # Use use_container_width for better responsiveness
-                        map_data = st_folium(
-                            map_obj, 
-                            height=600, 
-                            returned_objects=["last_object_clicked"], 
-                            key="housing_map",
-                            use_container_width=True
-                        )
+                        try:
+                            map_data = st_folium(
+                                map_obj, 
+                                height=600, 
+                                returned_objects=["last_object_clicked"], 
+                                key="housing_map",
+                                use_container_width=True
+                            )
+                        except TypeError:
+                            # Fallback for older streamlit-folium versions
+                            map_data = st_folium(
+                                map_obj,
+                                height=600,
+                                key="housing_map"
+                            )
                         
                         # Display clicked marker info
                         if map_data and map_data.get("last_object_clicked"):
