@@ -11,7 +11,7 @@ Deploy: Push to GitHub and connect to streamlit.io
 import pandas as pd
 import streamlit as st
 import folium
-from folium.plugins import MarkerCluster
+from folium.plugins import FastMarkerCluster
 from streamlit_folium import st_folium
 from pathlib import Path
 
@@ -159,38 +159,44 @@ def create_map(df_valid: pd.DataFrame):
         tiles="OpenStreetMap"
     )
     
-    # Create clusters for different sources
-    airbnb_cluster = MarkerCluster(name="Airbnb Listings", overlay=True, control=True).add_to(m)
-    lahd_cluster = MarkerCluster(name="LAHD Affordable Housing", overlay=True, control=True).add_to(m)
-    other_cluster = MarkerCluster(name="Other", overlay=True, control=True).add_to(m)
-    
-    # Add markers
-    for idx, row in df_valid.iterrows():
-        tooltip_text = str(row.get("name", f"Unit {row.get('listing_id', idx)}"))[:50]
-        popup_html = format_popup_html(row)
-        
-        source = str(row.get("source", "")).lower() if pd.notna(row.get("source")) else ""
-        if "airbnb" in source:
-            color = "blue"
-            cluster = airbnb_cluster
-        elif "lahd" in source or "affordable" in source:
-            color = "green"
-            cluster = lahd_cluster
+    # Use lightweight clusters to keep the HTML payload small enough to render
+    # (tens of thousands of CircleMarkers can overwhelm the browser and appear blank).
+    clusters = {
+        "airbnb": {
+            "label": "Airbnb Listings",
+            "filter": lambda src: "airbnb" in src,
+        },
+        "lahd": {
+            "label": "LAHD Affordable Housing",
+            "filter": lambda src: ("lahd" in src) or ("affordable" in src),
+        },
+        "other": {
+            "label": "Other",
+            "filter": lambda src: True,
+        },
+    }
+
+    # Pre-compute clusters in a single pass to avoid repeated dataframe scans
+    cluster_points = {key: [] for key in clusters}
+    for _, row in df_valid.iterrows():
+        source = str(row.get("source", "")).lower()
+        if clusters["airbnb"]["filter"](source):
+            cluster_key = "airbnb"
+        elif clusters["lahd"]["filter"](source):
+            cluster_key = "lahd"
         else:
-            color = "gray"
-            cluster = other_cluster
-        
-        folium.CircleMarker(
-            location=[row["lat"], row["lon"]],
-            radius=4,
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=tooltip_text,
-            color=color,
-            fillColor=color,
-            fillOpacity=0.6,
-            weight=1
-        ).add_to(cluster)
-    
+            cluster_key = "other"
+
+        popup_html = format_popup_html(row)
+        cluster_points[cluster_key].append([row["lat"], row["lon"], popup_html])
+
+    for cluster_key, meta in clusters.items():
+        feature_group = folium.FeatureGroup(name=meta["label"], overlay=True, control=True)
+
+        if cluster_points[cluster_key]:
+            FastMarkerCluster(data=cluster_points[cluster_key]).add_to(feature_group)
+            feature_group.add_to(m)
+
     folium.LayerControl().add_to(m)
     return m
 
