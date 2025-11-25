@@ -12,26 +12,29 @@ streamlit run streamlit_map.py
 
 This will open your browser automatically at `http://localhost:8501`
 
-### 2. Deploy to Streamlit Cloud
+### 2. Deploy to Streamlit Cloud (so it stays online)
 
 #### Step 1: Push to GitHub
 Make sure your code is in a GitHub repository:
-- `streamlit_map.py` (main app file)
+- `streamlit_app.py` (default entrypoint for Streamlit Cloud)
+- `streamlit_map.py` (main app logic)
 - `requirements.txt` (dependencies)
 - `project5_outputs/combined_housing_west_la.csv` (data file)
+
+> ✅ With `streamlit_app.py` present, Streamlit Cloud automatically picks the correct entrypoint—you don't need to adjust any settings when creating the app.
 
 #### Step 2: Connect to Streamlit Cloud
 1. Go to https://share.streamlit.io/
 2. Sign in with your GitHub account
 3. Click "New app"
 4. Select your repository
-5. Set the main file path to: `streamlit_map.py`
+5. Confirm the main file path is prefilled as `streamlit_app.py`
 6. Click "Deploy"
 
 #### Step 3: Wait for Deployment
 Streamlit Cloud will:
 - Install dependencies from `requirements.txt`
-- Run your app
+- Run your app (and keep it online at the provided URL)
 - Give you a public URL (e.g., `https://your-app-name.streamlit.app`)
 
 ## 📊 Data Collection Options
