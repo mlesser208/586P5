@@ -264,14 +264,14 @@ else:
         with st.spinner("Generating map (this may take a moment for large datasets)..."):
             try:
                 map_obj = create_map(df_valid)
-                map_data = st_folium(map_obj, width=None, height=600, returned_objects=["last_object_clicked"])
+                map_data = st_folium(map_obj, width=1000, height=600, returned_objects=["last_object_clicked"], key="housing_map")
+                
+                # Display clicked marker info
+                if map_data and map_data.get("last_object_clicked"):
+                    st.info("Click on markers to see detailed information in the popup!")
             except Exception as e:
                 st.error(f"❌ Error creating map: {str(e)}")
                 st.exception(e)
-
-# Display clicked marker info
-if 'map_data' in locals() and map_data and map_data.get("last_object_clicked"):
-    st.info("Click on markers to see detailed information in the popup!")
 
 st.caption("💡 Tip: Hover over markers to see names. Click for full details. Use the layer control to toggle different housing types.")
 
