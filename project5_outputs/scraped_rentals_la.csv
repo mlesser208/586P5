@@ -1,0 +1,21 @@
+source,listing_id,name,address,city,state,zip,price,beds,baths,sqft,lat,lon,url,study_area,full_address
+redfin,redfin_0,NEW 10 MINS AGO,NEW 10 MINS AGO,Los Angeles,CA,,798000.0,3.0,2.0,,,,,West LA,NEW 10 MINS AGO
+redfin,redfin_1,NEW 10 MINS AGO,NEW 10 MINS AGO,Los Angeles,CA,,798000.0,3.0,2.0,,,,,West LA,NEW 10 MINS AGO
+redfin,redfin_2,NEW 10 MINS AGO,NEW 10 MINS AGO,Los Angeles,CA,,798000.0,3.0,2.0,,,,,West LA,NEW 10 MINS AGO
+redfin,redfin_3,3D WALKTHROUGH,3D WALKTHROUGH,Los Angeles,CA,,385000.0,2.0,2.0,,,,,West LA,3D WALKTHROUGH
+redfin,redfin_4,3D WALKTHROUGH,3D WALKTHROUGH,Los Angeles,CA,,385000.0,2.0,2.0,,,,,West LA,3D WALKTHROUGH
+redfin,redfin_5,,,Los Angeles,CA,,,,,,,,,West LA,
+redfin,redfin_6,,,Los Angeles,CA,,,,,,,,,West LA,
+redfin,redfin_7,3D WALKTHROUGH,3D WALKTHROUGH,Los Angeles,CA,,565000.0,3.0,2.5,,,,,West LA,3D WALKTHROUGH
+redfin,redfin_8,3D WALKTHROUGH,3D WALKTHROUGH,Los Angeles,CA,,565000.0,3.0,2.5,,,,,West LA,3D WALKTHROUGH
+redfin,redfin_9,3D & VIDEO TOUR,3D & VIDEO TOUR,Los Angeles,CA,,629000.0,2.0,2.0,,,,,West LA,3D & VIDEO TOUR
+redfin,redfin_10,3D & VIDEO TOUR,3D & VIDEO TOUR,Los Angeles,CA,,629000.0,2.0,2.0,,,,,West LA,3D & VIDEO TOUR
+redfin,redfin_11,NEW 28 MINS AGO,NEW 28 MINS AGO,Los Angeles,CA,,685000.0,3.0,3.0,,,,,West LA,NEW 28 MINS AGO
+redfin,redfin_12,NEW 28 MINS AGO,NEW 28 MINS AGO,Los Angeles,CA,,685000.0,3.0,3.0,,,,,West LA,NEW 28 MINS AGO
+redfin,redfin_13,"$647,000","$647,000",Los Angeles,CA,,647000.0,2.0,2.0,,,,,West LA,"$647,000"
+redfin,redfin_14,"$647,000","$647,000",Los Angeles,CA,,647000.0,2.0,2.0,,,,,West LA,"$647,000"
+redfin,redfin_15,"$949,988","$949,988",Los Angeles,CA,,949988.0,9882.0,2.0,,,,,West LA,"$949,988"
+redfin,redfin_16,"$949,988","$949,988",Los Angeles,CA,,949988.0,9882.0,2.0,,,,,West LA,"$949,988"
+redfin,redfin_17,"$1,499,000","$1,499,000",Los Angeles,CA,,1499000.0,3.0,2.0,,,,,West LA,"$1,499,000"
+redfin,redfin_18,"$1,499,000","$1,499,000",Los Angeles,CA,,1499000.0,3.0,2.0,,,,,West LA,"$1,499,000"
+redfin,redfin_19,"$1,050,000","$1,050,000",Los Angeles,CA,,1050000.0,8.0,4.0,,,,,West LA,"$1,050,000"

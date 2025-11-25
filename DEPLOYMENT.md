@@ -34,12 +34,28 @@ Streamlit Cloud will:
 - Run your app
 - Give you a public URL (e.g., `https://your-app-name.streamlit.app`)
 
+## 📊 Data Collection Options
+
+### Option A: Use Existing Data (Recommended)
+Run the existing data combination script:
+```bash
+python combine_housing_data.py
+```
+This combines Airbnb listings and LAHD affordable housing data.
+
+### Option B: Add Scraped Real Estate Data (Advanced)
+For educational purposes only, you can scrape additional rental data:
+```bash
+python scrape_real_estate.py
+```
+⚠️ **Important**: This scrapes Zillow and Redfin. Use only for educational purposes and check with your instructor.
+
 ## 📁 Required Files for Deployment
 
 Make sure these files are in your GitHub repo:
 - ✅ `streamlit_map.py` - Main app
 - ✅ `requirements.txt` - Dependencies
-- ✅ `project5_outputs/combined_housing_west_la.csv` - Data file
+- ✅ `project5_outputs/combined_housing_west_la.csv` - Data file (or with scraped data)
 
 ## 🔧 Troubleshooting
 
