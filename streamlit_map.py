@@ -253,6 +253,9 @@ if "price" in df_valid.columns and (price_min > 0 or price_max < 10000):
 # Create and display map
 st.subheader("Map View")
 
+# Debug: Show filtered data count
+st.write(f"**Data points to display:** {len(df_valid):,}")
+
 # Check if we have data to display
 if len(df_valid) == 0:
     st.warning("⚠️ No data to display after filtering. Please adjust your filters.")
@@ -261,17 +264,48 @@ else:
     if "lat" not in df_valid.columns or "lon" not in df_valid.columns:
         st.error("❌ Missing required columns: 'lat' and/or 'lon'. Cannot create map.")
     else:
-        with st.spinner("Generating map (this may take a moment for large datasets)..."):
-            try:
-                map_obj = create_map(df_valid)
-                map_data = st_folium(map_obj, width=1000, height=600, returned_objects=["last_object_clicked"], key="housing_map")
-                
-                # Display clicked marker info
-                if map_data and map_data.get("last_object_clicked"):
-                    st.info("Click on markers to see detailed information in the popup!")
-            except Exception as e:
-                st.error(f"❌ Error creating map: {str(e)}")
-                st.exception(e)
+        # Verify coordinates are valid
+        valid_coords = df_valid[df_valid["lat"].notna() & df_valid["lon"].notna() & 
+                               (df_valid["lat"] != 0) & (df_valid["lon"] != 0)]
+        if len(valid_coords) == 0:
+            st.error("❌ No valid coordinates found in filtered data!")
+        else:
+            with st.spinner("Generating map (this may take a moment for large datasets)..."):
+                try:
+                    # Create map with filtered data
+                    st.write(f"Creating map with {len(valid_coords):,} markers...")
+                    map_obj = create_map(valid_coords)
+                    
+                    # Verify map object was created
+                    if map_obj is None:
+                        st.error("❌ Map object is None after creation!")
+                    else:
+                        # Display the map using st_folium
+                        # Try using use_container_width for better responsiveness
+                        map_data = st_folium(
+                            map_obj, 
+                            width=None,  # Let it use container width
+                            height=600, 
+                            returned_objects=["last_object_clicked"], 
+                            key="housing_map",
+                            use_container_width=True
+                        )
+                        
+                        # Display clicked marker info
+                        if map_data and map_data.get("last_object_clicked"):
+                            st.info("Click on markers to see detailed information in the popup!")
+                        
+                        st.success("✅ Map rendered successfully!")
+                except Exception as e:
+                    st.error(f"❌ Error creating map: {str(e)}")
+                    st.exception(e)
+                    st.write("**Debug info:**")
+                    st.write(f"- DataFrame shape: {valid_coords.shape}")
+                    st.write(f"- Columns: {list(valid_coords.columns)}")
+                    if len(valid_coords) > 0:
+                        st.write(f"- Sample lat/lon: {valid_coords[['lat', 'lon']].iloc[0].to_dict()}")
+                        st.write(f"- Lat range: {valid_coords['lat'].min():.4f} to {valid_coords['lat'].max():.4f}")
+                        st.write(f"- Lon range: {valid_coords['lon'].min():.4f} to {valid_coords['lon'].max():.4f}")
 
 st.caption("💡 Tip: Hover over markers to see names. Click for full details. Use the layer control to toggle different housing types.")
 
