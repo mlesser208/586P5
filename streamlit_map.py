@@ -51,6 +51,12 @@ def load_data():
         (df["lat"] != 0) & 
         (df["lon"] != 0)
     ].copy()
+    
+    # Ensure 'source' column is string type for string operations
+    # Fill NaN values with empty string before converting to string
+    if "source" in df_valid.columns:
+        df_valid["source"] = df_valid["source"].fillna("").astype(str)
+    
     return df_valid
 
 def format_popup_html(row: pd.Series) -> str:
