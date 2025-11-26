@@ -1,6 +1,6 @@
 # Streamlit Deployment Guide
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Test Locally First
 
@@ -60,7 +60,7 @@ Make sure these files are in your GitHub repo:
 - ✅ `requirements.txt` - Dependencies
 - ✅ `project5_outputs/combined_housing_west_la.csv` - Data file (or with scraped data)
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### If the app doesn't load:
 - Check that `combined_housing_west_la.csv` is in the `project5_outputs/` folder
@@ -72,7 +72,7 @@ Make sure these files are in your GitHub repo:
 - Marker clustering helps with performance
 - Consider filtering data if needed
 
-## 📝 Notes
+## Notes
 
 - The app is free on Streamlit Cloud
 - Your data stays private (only you can see it unless you make the repo public)
