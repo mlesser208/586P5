@@ -215,7 +215,7 @@ def create_map(df_valid: pd.DataFrame):
             # Fast overview cluster for zoomed-out views
             overview_cluster = FastMarkerCluster(
                 data=[
-                    [point["lat"], point["lon"], point["popup"]]
+                    [point["lat"], point["lon"]]
                     for point in cluster_points[cluster_key]
                 ]
             )
@@ -244,6 +244,7 @@ def create_map(df_valid: pd.DataFrame):
     # JavaScript to swap clusters based on zoom level to balance performance and metadata visibility
     if cluster_layer_pairs:
         toggle_js = f"""
+        <script>
         function toggleClusterLayers() {{
             var map = {m.get_name()};
             var zoom = map.getZoom();
@@ -265,6 +266,7 @@ def create_map(df_valid: pd.DataFrame):
 
         {m.get_name()}.on('zoomend', toggleClusterLayers);
         toggleClusterLayers();
+        </script>
         """
         m.get_root().html.add_child(Element(toggle_js))
 
