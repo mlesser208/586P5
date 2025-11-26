@@ -18,6 +18,7 @@ from pathlib import Path
 # Page config
 st.set_page_config(
     page_title="LA Housing Map",
+    page_icon="🏠",
     layout="wide"
 )
 
@@ -27,7 +28,6 @@ INPUT_CSV = Path("project5_outputs") / "combined_housing_west_la.csv"
 # Los Angeles center coordinates
 LA_CENTER_LAT = 34.0522
 LA_CENTER_LON = -118.2437
-DETAIL_ZOOM_LEVEL = 14
 
 @st.cache_data
 def load_data():
@@ -198,40 +198,10 @@ def create_map(df_valid: pd.DataFrame):
             feature_group.add_to(m)
 
     folium.LayerControl().add_to(m)
-
-    # JavaScript to swap clusters based on zoom level to balance performance and metadata visibility
-    if cluster_layer_pairs:
-        toggle_js = f"""
-        <script>
-        function toggleClusterLayers() {{
-            var map = {m.get_name()};
-            var zoom = map.getZoom();
-            var showDetail = zoom >= {DETAIL_ZOOM_LEVEL};
-            var layerPairs = [
-                {', '.join([f"{{overview: {pair['overview'].get_name()}, detail: {pair['detail'].get_name()}}}" for pair in cluster_layer_pairs])}
-            ];
-
-            layerPairs.forEach(function(pair) {{
-                if (showDetail) {{
-                    if (map.hasLayer(pair.overview)) {{ map.removeLayer(pair.overview); }}
-                    if (!map.hasLayer(pair.detail)) {{ map.addLayer(pair.detail); }}
-                }} else {{
-                    if (map.hasLayer(pair.detail)) {{ map.removeLayer(pair.detail); }}
-                    if (!map.hasLayer(pair.overview)) {{ map.addLayer(pair.overview); }}
-                }}
-            }});
-        }}
-
-        {m.get_name()}.on('zoomend', toggleClusterLayers);
-        toggleClusterLayers();
-        </script>
-        """
-        m.get_root().html.add_child(Element(toggle_js))
-
     return m
 
 # Main app
-st.title("Los Angeles Housing Units Map")
+st.title("🏠 Los Angeles Housing Units Map")
 st.markdown("Interactive map of Airbnb listings and affordable housing projects in Los Angeles")
 
 # Load data
@@ -239,18 +209,18 @@ with st.spinner("Loading housing data..."):
     try:
         df_valid = load_data()
         if len(df_valid) == 0:
-            st.error("No data loaded. Please check that the CSV file exists and contains valid data.")
+            st.error("⚠️ No data loaded! Please check that the CSV file exists and contains valid data.")
             st.stop()
     except FileNotFoundError as e:
-        st.error(f"File not found: {INPUT_CSV}")
+        st.error(f"❌ File not found: {INPUT_CSV}")
         st.error("Please ensure the CSV file exists in the project5_outputs folder.")
         st.stop()
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"❌ Error loading data: {str(e)}")
         st.stop()
 
 # Sidebar stats
-st.sidebar.header("Statistics")
+st.sidebar.header("📊 Statistics")
 st.sidebar.metric("Total Units", f"{len(df_valid):,}")
 
 # Check if source column exists and calculate counts safely
@@ -260,13 +230,13 @@ if "source" in df_valid.columns:
 else:
     airbnb_count = 0
     lahd_count = 0
-    st.warning("'source' column not found in data")
+    st.warning("⚠️ 'source' column not found in data")
 
 st.sidebar.metric("Airbnb Listings", f"{airbnb_count:,}")
 st.sidebar.metric("Affordable Housing", f"{lahd_count:,}")
 
 # Debug info (expandable)
-with st.sidebar.expander("Debug Info"):
+with st.sidebar.expander("🔧 Debug Info"):
     st.write(f"**Columns:** {', '.join(df_valid.columns.tolist())}")
     st.write(f"**Data shape:** {df_valid.shape}")
     if "lat" in df_valid.columns and "lon" in df_valid.columns:
@@ -275,7 +245,7 @@ with st.sidebar.expander("Debug Info"):
         st.write(f"**Source values:** {df_valid['source'].value_counts().to_dict()}")
 
 # Filter options
-st.sidebar.header("Filters")
+st.sidebar.header("🔍 Filters")
 show_airbnb = st.sidebar.checkbox("Show Airbnb Listings", value=True)
 show_lahd = st.sidebar.checkbox("Show Affordable Housing", value=True)
 
@@ -288,7 +258,7 @@ if "source" in df_valid.columns:
             df_valid = df_valid[~df_valid["source"].str.contains("lahd", case=False, na=False)]
 
 # Price filter
-st.sidebar.header("Price Range")
+st.sidebar.header("💰 Price Range")
 price_min = st.sidebar.number_input("Min Price ($)", min_value=0, value=0, step=10)
 price_max = st.sidebar.number_input("Max Price ($)", min_value=0, value=10000, step=10)
 
@@ -306,17 +276,17 @@ st.write(f"**Data points to display:** {len(df_valid):,}")
 
 # Check if we have data to display
 if len(df_valid) == 0:
-    st.warning("No data to display after filtering. Please adjust your filters.")
+    st.warning("⚠️ No data to display after filtering. Please adjust your filters.")
 else:
     # Verify required columns exist
     if "lat" not in df_valid.columns or "lon" not in df_valid.columns:
-        st.error("Missing required columns: 'lat' and/or 'lon'. Cannot create map.")
+        st.error("❌ Missing required columns: 'lat' and/or 'lon'. Cannot create map.")
     else:
         # Verify coordinates are valid
-        valid_coords = df_valid[df_valid["lat"].notna() & df_valid["lon"].notna() &
+        valid_coords = df_valid[df_valid["lat"].notna() & df_valid["lon"].notna() & 
                                (df_valid["lat"] != 0) & (df_valid["lon"] != 0)]
         if len(valid_coords) == 0:
-            st.error("No valid coordinates found in filtered data.")
+            st.error("❌ No valid coordinates found in filtered data!")
         else:
             with st.spinner("Generating map (this may take a moment for large datasets)..."):
                 try:
@@ -326,7 +296,7 @@ else:
                     
                     # Verify map object was created
                     if map_obj is None:
-                        st.error("Map object is None after creation.")
+                        st.error("❌ Map object is None after creation!")
                     else:
                         # Display the map using st_folium
                         # Use use_container_width for better responsiveness
@@ -349,10 +319,10 @@ else:
                         # Display clicked marker info
                         if map_data and map_data.get("last_object_clicked"):
                             st.info("Click on markers to see detailed information in the popup!")
-
-                        st.success("Map rendered successfully.")
+                        
+                        st.success("✅ Map rendered successfully!")
                 except Exception as e:
-                    st.error(f"Error creating map: {str(e)}")
+                    st.error(f"❌ Error creating map: {str(e)}")
                     st.exception(e)
                     st.write("**Debug info:**")
                     st.write(f"- DataFrame shape: {valid_coords.shape}")
@@ -362,5 +332,5 @@ else:
                         st.write(f"- Lat range: {valid_coords['lat'].min():.4f} to {valid_coords['lat'].max():.4f}")
                         st.write(f"- Lon range: {valid_coords['lon'].min():.4f} to {valid_coords['lon'].max():.4f}")
 
-st.caption("Tip: Hover over markers to see names. Click for full details. Use the layer control to toggle different housing types.")
+st.caption("💡 Tip: Hover over markers to see names. Click for full details. Use the layer control to toggle different housing types.")
 

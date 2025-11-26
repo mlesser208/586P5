@@ -258,7 +258,7 @@ def build_combined_dataset() -> Path:
     out_path = out_folder / OUTPUT_FILENAME
 
     combined_df.to_csv(out_path, index=False)
-    print(f"\nWrote combined dataset to:\n{out_path}")
+    print(f"\n✅ Wrote combined dataset to:\n{out_path}")
 
     return out_path
 
