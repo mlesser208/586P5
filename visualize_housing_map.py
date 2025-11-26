@@ -198,7 +198,7 @@ def create_housing_map(csv_path: str, output_path: str) -> None:
     print(f"Saving map to: {output_path}")
     m.save(output_path)
     
-    print("\nMap created successfully.")
+    print("\n✅ Map created successfully!")
     print(f"Open {output_path} in your web browser to view the interactive map.")
     print("\nMap features:")
     print(f"  - {len(df_valid)} housing units displayed")
