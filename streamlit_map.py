@@ -11,8 +11,7 @@ Deploy: Push to GitHub and connect to streamlit.io
 import pandas as pd
 import streamlit as st
 import folium
-from branca.element import Element
-from folium.plugins import FastMarkerCluster, MarkerCluster
+from folium.plugins import FastMarkerCluster
 from streamlit_folium import st_folium
 from pathlib import Path
 
@@ -189,54 +188,13 @@ def create_map(df_valid: pd.DataFrame):
             cluster_key = "other"
 
         popup_html = format_popup_html(row)
-        tooltip_text = None
-        if pd.notna(row.get("name")) and str(row.get("name")).strip():
-            tooltip_text = str(row["name"])
-        elif pd.notna(row.get("address")) and str(row.get("address")).strip():
-            tooltip_text = str(row["address"])
-        elif pd.notna(row.get("listing_id")) and str(row.get("listing_id")).strip():
-            tooltip_text = f"Listing {row['listing_id']}"
-        cluster_points[cluster_key].append(
-            {
-                "lat": row["lat"],
-                "lon": row["lon"],
-                "popup": popup_html,
-                "tooltip": tooltip_text,
-            }
-        )
-
-    # Keep references for JS-based toggling between fast and detailed clusters
-    cluster_layer_pairs = []
+        cluster_points[cluster_key].append([row["lat"], row["lon"], popup_html])
 
     for cluster_key, meta in clusters.items():
         feature_group = folium.FeatureGroup(name=meta["label"], overlay=True, control=True)
 
         if cluster_points[cluster_key]:
-            # Fast overview cluster for zoomed-out views
-            overview_cluster = FastMarkerCluster(
-                data=[
-                    [point["lat"], point["lon"]]
-                    for point in cluster_points[cluster_key]
-                ]
-            )
-            overview_cluster.add_to(feature_group)
-
-            # Detailed cluster with tooltips/popups for zoomed-in views
-            detail_cluster = MarkerCluster(disableClusteringAtZoom=17)
-            for point in cluster_points[cluster_key]:
-                folium.Marker(
-                    location=[point["lat"], point["lon"]],
-                    popup=folium.Popup(point["popup"], max_width=350),
-                    tooltip=point["tooltip"],
-                ).add_to(detail_cluster)
-            detail_cluster.add_to(feature_group)
-
-            # Track for toggling
-            cluster_layer_pairs.append({
-                "overview": overview_cluster,
-                "detail": detail_cluster,
-            })
-
+            FastMarkerCluster(data=cluster_points[cluster_key]).add_to(feature_group)
             feature_group.add_to(m)
 
     folium.LayerControl().add_to(m)
