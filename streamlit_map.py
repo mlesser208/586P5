@@ -138,7 +138,7 @@ INPUT_CSV = Path("project5_outputs") / "combined_housing_west_la.csv"
 # Los Angeles center coordinates
 LA_CENTER_LAT = 34.0522
 LA_CENTER_LON = -118.2437
-DETAIL_ZOOM_LEVEL = 14  # Zoom level at which to show detailed markers with full attributes
+DETAIL_ZOOM_LEVEL = 18  # Zoom level at which to show detailed markers with full attributes
 
 @st.cache_data
 def load_data():
