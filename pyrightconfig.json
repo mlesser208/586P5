@@ -1,0 +1,14 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/pyright-internal/src/common/schemas/pyrightconfig.schema.json",
+    "typeCheckingMode": "standard",
+    "stubPath": "./typings",
+    "include": [
+        "streamlit_map.py",
+        "streamlit_app.py",
+        "load_data.py",
+        "combine_housing_data.py",
+        "visualize_housing_map.py",
+        "scrape_real_estate.py"
+    ]
+}
+
