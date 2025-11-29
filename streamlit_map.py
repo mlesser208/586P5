@@ -8,10 +8,12 @@ Run locally: streamlit run streamlit_map.py
 Deploy: Push to GitHub and connect to streamlit.io
 """
 
-from typing import Callable, Dict, List, Optional, Tuple, TypedDict
+from collections.abc import Mapping, MutableMapping
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union, cast
 import random
 
 import pandas as pd
+from pandas.errors import EmptyDataError, ParserError
 import streamlit as st
 import folium
 from folium.plugins import MarkerCluster
@@ -132,67 +134,133 @@ st.set_page_config(
     layout="wide"
 )
 
-# Input CSV file (use Path for cross-platform compatibility)
-INPUT_CSV = Path("project5_outputs") / "combined_housing_west_la.csv"
+# Input CSV files (use Path for cross-platform compatibility)
+LOCATIONS_CSV = Path("project5_outputs") / "housing_locations.csv"
+DETAILS_CSV = Path("project5_outputs") / "housing_details.csv"
 
 # Los Angeles center coordinates
 LA_CENTER_LAT = 34.0522
 LA_CENTER_LON = -118.2437
-DETAIL_ZOOM_LEVEL = 18  # Zoom level at which to show detailed markers with full attributes
 
 @st.cache_data
-def load_data():
+def load_location_data() -> pd.DataFrame:
     """
-    Purpose: Loads and caches housing data from CSV file.
+    Purpose: Loads lightweight location data for map rendering.
     
     Parameters:
-        None (uses module-level INPUT_CSV constant)
+        None (uses module-level LOCATIONS_CSV constant).
     
     Return Value:
-        pd.DataFrame: DataFrame with valid coordinates filtered.
+        pd.DataFrame: DataFrame containing listing_id, lat, lon, and optional metadata columns
+                      required for map filtering.
     
     Exceptions:
-        FileNotFoundError: Raised if INPUT_CSV file does not exist.
-        pd.errors.EmptyDataError: Raised if CSV is empty.
-        KeyError: Raised if required columns (lat, lon) are missing.
+        FileNotFoundError: Raised if LOCATIONS_CSV does not exist.
+        pd.errors.EmptyDataError: Raised if the CSV is empty.
+        KeyError: Raised if required columns (listing_id, lat, lon) are missing.
     """
-    csv_path = str(INPUT_CSV)
-    if not Path(csv_path).exists():
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+    csv_path = LOCATIONS_CSV
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Location CSV file not found: {csv_path}")
     
-    df = pd.read_csv(csv_path, low_memory=False)
+    df = pd.read_csv(str(csv_path), low_memory=False)
     
-    # Make sure key numeric columns are numeric
+    for required in ["listing_id", "lat", "lon"]:
+        if required not in df.columns:
+            raise KeyError(f"Required column '{required}' not found in {csv_path}")
+    
+    df["listing_id"] = df["listing_id"].astype(str)
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+    df = df.dropna(subset=["lat", "lon"])
+    df = df[(df["lat"] != 0) & (df["lon"] != 0)]
+    
+    if "source" in df.columns:
+        df["source"] = df["source"].fillna("").astype(str)
+    if "study_area" in df.columns:
+        df["study_area"] = df["study_area"].fillna("").astype(str)
+    
+    return df
+
+
+@st.cache_data
+def load_detail_data() -> pd.DataFrame:
+    """
+    Purpose: Loads the full housing detail dataset used for filtering and sidebar display.
+    
+    Parameters:
+        None (uses module-level DETAILS_CSV constant).
+    
+    Return Value:
+        pd.DataFrame: Full dataset including metadata columns such as price, beds, baths,
+                      address, etc.
+    
+    Exceptions:
+        FileNotFoundError: Raised if DETAILS_CSV does not exist.
+        pd.errors.EmptyDataError: Raised if the CSV is empty.
+        KeyError: Raised if required column 'listing_id' is missing.
+    """
+    csv_path = DETAILS_CSV
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Detail CSV file not found: {csv_path}")
+    
+    df = pd.read_csv(str(csv_path), low_memory=False)
+    if "listing_id" not in df.columns:
+        raise KeyError(f"Required column 'listing_id' not found in {csv_path}")
+    
+    df["listing_id"] = df["listing_id"].astype(str)
+    
     for col in ["lat", "lon", "price", "beds", "baths"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     
-    # Check for required columns
-    if "lat" not in df.columns or "lon" not in df.columns:
-        raise KeyError(f"Required columns 'lat' and/or 'lon' not found. Available columns: {list(df.columns)}")
+    if "source" in df.columns:
+        df["source"] = df["source"].fillna("").astype(str)
     
-    # Filter to rows with valid coordinates
-    df_valid = df[
-        df["lat"].notna() & 
-        df["lon"].notna() & 
-        (df["lat"] != 0) & 
-        (df["lon"] != 0)
-    ].copy()
-    
-    # Ensure 'source' column is string type for string operations
-    # Fill NaN values with empty string before converting to string
-    if "source" in df_valid.columns:
-        df_valid["source"] = df_valid["source"].fillna("").astype(str)
-    
-    return df_valid
+    return df
 
-def format_popup_html(row: pd.Series) -> str:
+
+def find_listing_id_by_coordinates(
+    lat: float,
+    lon: float,
+    locations_table: pd.DataFrame,
+    tolerance: float = 1e-5
+) -> Optional[str]:
     """
-    Purpose: Formats a row of housing data into an HTML popup string for map click display.
+    Purpose: Finds the listing_id corresponding to a clicked latitude/longitude pair.
     
     Parameters:
-        row (pd.Series): A pandas Series representing a single housing unit row with columns:
-                        name, source, price, beds, baths, address, city, zip, url, listing_id.
+        lat (float): Latitude from the map click event.
+        lon (float): Longitude from the map click event.
+        locations_df (pd.DataFrame): Location dataset containing listing_id, lat, and lon.
+        tolerance (float): Allowed difference between stored coordinates and click
+                           coordinates. Defaults to 1e-5 (~1 meter).
+    
+    Return Value:
+        Optional[str]: Matching listing_id if found, otherwise None.
+    
+    Exceptions:
+        None (returns None if no match is found).
+    """
+    if locations_table.empty:
+        return None
+    
+    lat_match = (locations_table["lat"] - lat).abs() <= tolerance
+    lon_match = (locations_table["lon"] - lon).abs() <= tolerance
+    matches = locations_table[lat_match & lon_match]
+    if matches.empty:
+        return None
+    
+    return matches.iloc[0]["listing_id"]
+
+def format_popup_html(row: Union[pd.Series, Mapping[str, Any]]) -> str:
+    """
+    Purpose: Formats housing data into an HTML popup string for map click display.
+    
+    Parameters:
+        row (Union[pd.Series, Mapping[str, Any]]): Housing data for a single unit.
+                        Accepts either a pandas Series or a mapping with keys such as name,
+                        source, price, beds, baths, address, city, zip, url, listing_id.
     
     Return Value:
         str: An HTML-formatted string containing the unit's metadata, with missing values
@@ -202,18 +270,25 @@ def format_popup_html(row: pd.Series) -> str:
         KeyError: Raised if required columns are missing from the row (though the function
                  uses .get() to handle missing keys gracefully).
     """
+    if isinstance(row, pd.Series):
+        series_row = cast(pd.Series, row)
+        data = series_row.to_dict()
+    else:
+        data = dict(row)
+
     tooltip_parts = []
     
     # Name
-    if pd.notna(row.get("name")) and str(row.get("name")).strip():
-        tooltip_parts.append(f"<b>{row['name']}</b>")
+    name_value = data.get("name")
+    if pd.notna(name_value) and str(name_value).strip():
+        tooltip_parts.append(f"<b>{name_value}</b>")
     
     # Source
-    source = row.get("source", "Unknown")
+    source = data.get("source", "Unknown")
     tooltip_parts.append(f"<i>Source: {source}</i>")
     
     # Price
-    price = row.get("price")
+    price = data.get("price")
     try:
         if pd.notna(price) and str(price).strip() != "":
             # convert to float safely
@@ -225,39 +300,41 @@ def format_popup_html(row: pd.Series) -> str:
     
     # Beds/Baths
     bed_bath = []
-    if pd.notna(row.get("beds")):
-        bed_bath.append(f"{int(row['beds'])} bed(s)")
-    if pd.notna(row.get("baths")):
-        bed_bath.append(f"{row['baths']} bath(s)")
+    beds_value = data.get("beds")
+    baths_value = data.get("baths")
+    if pd.notna(beds_value) and str(beds_value).strip():
+        bed_bath.append(f"{beds_value} bed(s)")
+    if pd.notna(baths_value) and str(baths_value).strip():
+        bed_bath.append(f"{baths_value} bath(s)")
     if bed_bath:
         tooltip_parts.append(", ".join(bed_bath))
     
     # Address
     address_parts = []
-    if pd.notna(row.get("address")) and str(row.get("address")).strip():
-        address_parts.append(str(row["address"]))
-    if pd.notna(row.get("city")) and str(row.get("city")).strip():
-        address_parts.append(str(row["city"]))
-    if pd.notna(row.get("zip")) and str(row.get("zip")).strip():
-        address_parts.append(str(row["zip"]))
+    if pd.notna(data.get("address")) and str(data.get("address")).strip():
+        address_parts.append(str(data.get("address")))
+    if pd.notna(data.get("city")) and str(data.get("city")).strip():
+        address_parts.append(str(data.get("city")))
+    if pd.notna(data.get("zip")) and str(data.get("zip")).strip():
+        address_parts.append(str(data.get("zip")))
     if address_parts:
         tooltip_parts.append("Address: " + ", ".join(address_parts))
     
     # URL (if available)
-    if pd.notna(row.get("url")) and str(row.get("url")).strip():
-        tooltip_parts.append(f"<a href='{row['url']}' target='_blank'>View Listing</a>")
+    if pd.notna(data.get("url")) and str(data.get("url")).strip():
+        tooltip_parts.append(f"<a href='{data.get('url')}' target='_blank'>View Listing</a>")
     
     return "<br>".join(tooltip_parts)
 
-def create_map_lightweight(df_valid: pd.DataFrame, current_zoom: Optional[int] = None):
+def create_map_lightweight(locations_table: pd.DataFrame, initial_zoom: Optional[int] = None):
     """
     Purpose: Creates a Folium map with lightweight markers for efficient rendering when zoomed out.
              Uses FastMarkerCluster for better performance with large datasets.
     
     Parameters:
-        df_valid (pd.DataFrame): DataFrame containing housing units with valid coordinates.
-                                Expected columns: lat, lon, name, source.
-        current_zoom (int): Current zoom level of the map. If None, uses default zoom_start.
+        locations_table (pd.DataFrame): DataFrame containing housing units with valid coordinates.
+                                Expected columns: listing_id, lat, lon, and optional metadata.
+        initial_zoom (int): Current zoom level of the map. If None, uses default zoom_start.
     
     Return Value:
         folium.Map: A Folium map object with lightweight markers and fast clustering.
@@ -265,7 +342,7 @@ def create_map_lightweight(df_valid: pd.DataFrame, current_zoom: Optional[int] =
     Exceptions:
         KeyError: Raised if required columns (lat, lon) are missing from the DataFrame.
     """
-    zoom_start = current_zoom if current_zoom is not None else 11
+    zoom_start = initial_zoom if initial_zoom is not None else 11
     m = folium.Map(
         location=[LA_CENTER_LAT, LA_CENTER_LON],
         zoom_start=zoom_start,
@@ -275,7 +352,7 @@ def create_map_lightweight(df_valid: pd.DataFrame, current_zoom: Optional[int] =
     # Prepare data for FastMarkerCluster - just coordinates and minimal info
     # FastMarkerCluster is much faster but doesn't support individual popups
     locations = []
-    for _, row in df_valid.iterrows():
+    for _, row in locations_table.iterrows():
         locations.append([row["lat"], row["lon"]])
     
     # Use FastMarkerCluster for optimal performance when zoomed out
@@ -312,117 +389,6 @@ def create_map_lightweight(df_valid: pd.DataFrame, current_zoom: Optional[int] =
     
     return m
 
-
-def create_map_detailed(df_valid: pd.DataFrame, current_zoom: Optional[int] = None):
-    """
-    Purpose: Creates a Folium map with detailed markers including full attribute data.
-             Used when zoomed in to show individual house icons with complete information.
-    
-    Parameters:
-        df_valid (pd.DataFrame): DataFrame containing housing units with valid coordinates.
-                                Expected columns: lat, lon, name, source, price, beds, baths,
-                                address, city, zip, url, listing_id.
-        current_zoom (int): Current zoom level of the map. If None, uses default zoom_start.
-    
-    Return Value:
-        folium.Map: A Folium map object with detailed markers and full attribute clusters.
-    
-    Exceptions:
-        KeyError: Raised if required columns (lat, lon) are missing from the DataFrame.
-    """
-    zoom_start = current_zoom if current_zoom is not None else DETAIL_ZOOM_LEVEL
-    m = folium.Map(
-        location=[LA_CENTER_LAT, LA_CENTER_LON],
-        zoom_start=zoom_start,
-        tiles="OpenStreetMap"
-    )
-    
-    # Use regular MarkerCluster with full attribute data for zoomed-in view
-    # Create separate clusters for different sources
-    airbnb_cluster = MarkerCluster(
-        name="Airbnb Listings",
-        overlay=True,
-        control=True,
-        options={
-            "chunkedLoading": True,
-            "maxClusterRadius": 50,
-        }
-    ).add_to(m)
-    
-    lahd_cluster = MarkerCluster(
-        name="LAHD Affordable Housing",
-        overlay=True,
-        control=True,
-        options={
-            "chunkedLoading": True,
-            "maxClusterRadius": 50,
-        }
-    ).add_to(m)
-    
-    other_cluster = MarkerCluster(
-        name="Other",
-        overlay=True,
-        control=True,
-        options={
-            "chunkedLoading": True,
-            "maxClusterRadius": 50,
-        }
-    ).add_to(m)
-
-    # Add all markers with full popup data to appropriate clusters
-    marker_count = 0
-    for _, row in df_valid.iterrows():
-        source = str(row.get("source", "")).lower() if pd.notna(row.get("source")) else ""
-        popup_html = format_popup_html(row)
-        
-        # Determine which cluster to use
-        if "airbnb" in source:
-            cluster = airbnb_cluster
-        elif "lahd" in source or "affordable" in source:
-            cluster = lahd_cluster
-        else:
-            cluster = other_cluster
-        
-        # Create marker with full popup data
-        folium.Marker(
-            location=[row["lat"], row["lon"]],
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=str(row.get("name", "Housing Unit"))[:50],
-            icon=folium.Icon(icon="home", prefix="fa")  # House icon for detailed view
-        ).add_to(cluster)
-        
-        marker_count += 1
-
-    # Add layer control
-    folium.LayerControl().add_to(m)
-
-    return m
-
-
-def create_map(df_valid: pd.DataFrame, current_zoom: Optional[int] = None, use_detailed: bool = False):
-    """
-    Purpose: Creates a Folium map with markers, choosing between lightweight or detailed
-             rendering based on zoom level for optimal performance.
-    
-    Parameters:
-        df_valid (pd.DataFrame): DataFrame containing housing units with valid coordinates.
-                                Expected columns: lat, lon, name, source, price, beds, baths,
-                                address, city, zip, url, listing_id.
-        current_zoom (int): Current zoom level of the map. If None, uses default zoom_start.
-        use_detailed (bool): If True, uses detailed markers with full attributes. If False,
-                            uses lightweight fast clustering. Defaults to False.
-    
-    Return Value:
-        folium.Map: A Folium map object with markers and clusters added.
-    
-    Exceptions:
-        KeyError: Raised if required columns (lat, lon) are missing from the DataFrame.
-    """
-    if use_detailed:
-        return create_map_detailed(df_valid, current_zoom)
-    else:
-        return create_map_lightweight(df_valid, current_zoom)
-
 # Main app
 st.title("Los Angeles Housing Units Map")
 st.markdown("Interactive map of Airbnb listings and affordable housing projects in Los Angeles")
@@ -430,158 +396,145 @@ st.markdown("Interactive map of Airbnb listings and affordable housing projects 
 # Load data
 with st.spinner("Loading housing data..."):
     try:
-        df_valid = load_data()
-        if len(df_valid) == 0:
-            st.error("No data loaded. Please check that the CSV file exists and contains valid data.")
+        locations_df = load_location_data()
+        details_df = load_detail_data()
+        if len(details_df) == 0:
+            st.error("No detail data loaded. Please regenerate the housing dataset.")
+            st.stop()
+        if len(locations_df) == 0:
+            st.error("Location dataset is empty. Ensure geocoded rows exist before rendering the map.")
             st.stop()
     except FileNotFoundError as e:
-        st.error(f"File not found: {INPUT_CSV}")
-        st.error("Please ensure the CSV file exists in the project5_outputs folder.")
+        st.error(str(e))
+        st.error("Please ensure the new CSV files exist in the project5_outputs folder.")
         st.stop()
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+    except (ParserError, EmptyDataError, KeyError, ValueError, OSError) as load_error:
+        st.error(f"Error loading data: {load_error}")
+        st.exception(load_error)
         st.stop()
 
 # Sidebar stats
 st.sidebar.header("Statistics")
-st.sidebar.metric("Total Units", f"{len(df_valid):,}")
+st.sidebar.metric("Total Units", f"{len(details_df):,}")
 
 # Check if source column exists and calculate counts safely
-if "source" in df_valid.columns:
-    airbnb_count = len(df_valid[df_valid["source"].str.contains("airbnb", case=False, na=False)])
-    lahd_count = len(df_valid[df_valid["source"].str.contains("lahd", case=False, na=False)])
+if "source" in details_df.columns:
+    airbnb_count = len(details_df[details_df["source"].str.contains("airbnb", case=False, na=False)])
+    lahd_count = len(details_df[details_df["source"].str.contains("lahd", case=False, na=False)])
 else:
     airbnb_count = 0
     lahd_count = 0
-    st.warning("'source' column not found in data")
+    st.warning("'source' column not found in detail data")
 
 st.sidebar.metric("Airbnb Listings", f"{airbnb_count:,}")
 st.sidebar.metric("Affordable Housing", f"{lahd_count:,}")
 
 # Debug info (expandable)
 with st.sidebar.expander("Debug Info"):
-    st.write(f"**Columns:** {', '.join(df_valid.columns.tolist())}")
-    st.write(f"**Data shape:** {df_valid.shape}")
-    if "lat" in df_valid.columns and "lon" in df_valid.columns:
-        st.write(f"**Valid coordinates:** {df_valid[['lat', 'lon']].notna().all(axis=1).sum()}")
-    if "source" in df_valid.columns:
-        st.write(f"**Source values:** {df_valid['source'].value_counts().to_dict()}")
+    st.write(f"**Detail columns:** {', '.join(details_df.columns.tolist())}")
+    st.write(f"**Detail shape:** {details_df.shape}")
+    st.write(f"**Location shape:** {locations_df.shape}")
+    if "source" in details_df.columns:
+        st.write(f"**Source values:** {details_df['source'].value_counts().to_dict()}")
 
 # Filter options
 st.sidebar.header("Filters")
 show_airbnb = st.sidebar.checkbox("Show Airbnb Listings", value=True)
 show_lahd = st.sidebar.checkbox("Show Affordable Housing", value=True)
 
-# Filter data based on selections
-if "source" in df_valid.columns:
-    if not show_airbnb or not show_lahd:
-        if not show_airbnb:
-            df_valid = df_valid[~df_valid["source"].str.contains("airbnb", case=False, na=False)]
-        if not show_lahd:
-            df_valid = df_valid[~df_valid["source"].str.contains("lahd", case=False, na=False)]
+filtered_details = details_df.copy()
+if "source" in filtered_details.columns:
+    if not show_airbnb:
+        filtered_details = filtered_details[~filtered_details["source"].str.contains("airbnb", case=False, na=False)]
+    if not show_lahd:
+        filtered_details = filtered_details[~filtered_details["source"].str.contains("lahd", case=False, na=False)]
 
 # Price filter
 st.sidebar.header("Price Range")
 price_min = st.sidebar.number_input("Min Price ($)", min_value=0, value=0, step=10)
 price_max = st.sidebar.number_input("Max Price ($)", min_value=0, value=10000, step=10)
 
-if "price" in df_valid.columns and (price_min > 0 or price_max < 10000):
-    df_valid = df_valid[
-        (df_valid["price"].isna()) | 
-        ((df_valid["price"] >= price_min) & (df_valid["price"] <= price_max))
+if "price" in filtered_details.columns and (price_min > 0 or price_max < 10000):
+    filtered_details = filtered_details[
+        (filtered_details["price"].isna()) | 
+        ((filtered_details["price"] >= price_min) & (filtered_details["price"] <= price_max))
     ]
 
-# Create and display map
+filtered_ids = set(filtered_details["listing_id"])
+filtered_locations = locations_df[locations_df["listing_id"].isin(filtered_ids)]
+filtered_detail_lookup = filtered_details.set_index("listing_id", drop=False).to_dict(orient="index")
+
+# Initialize session state
+if "map_zoom" not in st.session_state:
+    st.session_state.map_zoom = 11
+if "selected_listing_id" not in st.session_state:
+    st.session_state.selected_listing_id = None
+
+# Create and display map with side detail panel
 st.subheader("Map View")
+detail_col, map_col = st.columns([1, 3])
+map_data: Optional[MutableMapping[str, Any]] = None
 
-# Debug: Show filtered data count
-st.write(f"**Data points to display:** {len(df_valid):,}")
-
-# Check if we have data to display
-if len(df_valid) == 0:
-    st.warning("No data to display after filtering. Please adjust your filters.")
-else:
-    # Verify required columns exist
-    if "lat" not in df_valid.columns or "lon" not in df_valid.columns:
-        st.error("Missing required columns: 'lat' and/or 'lon'. Cannot create map.")
+with map_col:
+    st.write(f"**Data points to display:** {len(filtered_locations):,}")
+    if len(filtered_locations) == 0:
+        st.warning("No data to display after filtering. Please adjust your filters.")
+        map_data = None
     else:
-        # Verify coordinates are valid
-        valid_coords = df_valid[df_valid["lat"].notna() & df_valid["lon"].notna() &
-                               (df_valid["lat"] != 0) & (df_valid["lon"] != 0)]
-        if len(valid_coords) == 0:
-            st.error("No valid coordinates found in filtered data.")
+        with st.spinner("Rendering fast map view (location-only data)..."):
+            try:
+                current_zoom = st.session_state.map_zoom
+                map_obj = create_map_lightweight(filtered_locations, initial_zoom=current_zoom)
+                map_data = st_folium(
+                    map_obj,
+                    height=600,
+                    returned_objects=["last_object_clicked", "zoom"],
+                    key="housing_map",
+                    use_container_width=True
+                )
+                if map_data and "zoom" in map_data and map_data["zoom"] is not None:
+                    new_zoom = map_data["zoom"]
+                    if new_zoom != st.session_state.map_zoom:
+                        st.session_state.map_zoom = new_zoom
+                        st.rerun()
+            except (ValueError, KeyError, RuntimeError) as map_error:
+                map_data = None
+                st.error(f"Error creating map: {map_error}")
+                st.exception(map_error)
+
+selected_listing: Optional[Dict[str, Any]] = None
+if filtered_locations.empty:
+    st.session_state.selected_listing_id = None
+else:
+    click_data = map_data.get("last_object_clicked") if map_data else None
+    if isinstance(click_data, Mapping):
+        lat_value = click_data.get("lat")
+        lon_value = click_data.get("lng")
+        if isinstance(lat_value, (float, int)) and isinstance(lon_value, (float, int)):
+            listing_id = find_listing_id_by_coordinates(
+                float(lat_value),
+                float(lon_value),
+                filtered_locations
+            )
+            if listing_id:
+                st.session_state.selected_listing_id = listing_id
+    selected_id = st.session_state.selected_listing_id
+    if selected_id:
+        raw_listing = filtered_detail_lookup.get(selected_id)
+        if raw_listing is not None:
+            selected_listing = cast(Dict[str, Any], raw_listing)
         else:
-            # Initialize session state for zoom tracking
-            if "map_zoom" not in st.session_state:
-                st.session_state.map_zoom = 11
-            if "use_detailed_view" not in st.session_state:
-                st.session_state.use_detailed_view = False
-            
-            with st.spinner("Generating map (this may take a moment for large datasets)..."):
-                try:
-                    # Determine if we should use detailed view based on zoom level
-                    # Get zoom from session state (will be updated after first render)
-                    current_zoom = st.session_state.map_zoom
-                    use_detailed = current_zoom >= DETAIL_ZOOM_LEVEL
-                    
-                    # Update session state
-                    st.session_state.use_detailed_view = use_detailed
-                    
-                    # Create map with filtered data
-                    if use_detailed:
-                        st.write(f"Creating detailed map with {len(valid_coords):,} markers (zoom level: {current_zoom})...")
-                        st.info("🔍 Zoomed in: Showing detailed markers with full attribute data and house icons.")
-                    else:
-                        st.write(f"Creating fast map view with {len(valid_coords):,} markers (zoom level: {current_zoom})...")
-                        st.info("⚡ Zoomed out: Using fast clustering for better performance. Zoom in to see detailed information.")
-                    
-                    map_obj = create_map(valid_coords, current_zoom=current_zoom, use_detailed=use_detailed)
-                    
-                    # Verify map object was created
-                    if map_obj is None:
-                        st.error("Map object is None after creation.")
-                    else:
-                        # Display the map using st_folium
-                        # Request zoom level in returned objects to track changes
-                        try:
-                            map_data = st_folium(
-                                map_obj, 
-                                height=600, 
-                                returned_objects=["last_object_clicked", "zoom"], 
-                                key="housing_map",
-                                use_container_width=True
-                            )
-                        except TypeError:
-                            # Fallback for older streamlit-folium versions
-                            map_data = st_folium(
-                                map_obj,
-                                height=600,
-                                key="housing_map"
-                            )
-                        
-                        # Update zoom level from map if available
-                        if map_data and "zoom" in map_data and map_data["zoom"] is not None:
-                            new_zoom = map_data["zoom"]
-                            if new_zoom != st.session_state.map_zoom:
-                                st.session_state.map_zoom = new_zoom
-                                # Trigger rerun to update map view
-                                st.rerun()
-                        
-                        # Display clicked marker info
-                        if map_data and map_data.get("last_object_clicked"):
-                            st.info("Click on markers to see detailed information in the popup!")
+            st.session_state.selected_listing_id = None
 
-                        st.success("Map rendered successfully.")
-                except Exception as e:
-                    st.error(f"Error creating map: {str(e)}")
-                    st.exception(e)
-                    st.write("**Debug info:**")
-                    st.write(f"- DataFrame shape: {valid_coords.shape}")
-                    st.write(f"- Columns: {list(valid_coords.columns)}")
-                    if len(valid_coords) > 0:
-                        st.write(f"- Sample lat/lon: {valid_coords[['lat', 'lon']].iloc[0].to_dict()}")
-                        st.write(f"- Lat range: {valid_coords['lat'].min():.4f} to {valid_coords['lat'].max():.4f}")
-                        st.write(f"- Lon range: {valid_coords['lon'].min():.4f} to {valid_coords['lon'].max():.4f}")
+with detail_col:
+    st.markdown("### Listing Details")
+    if not selected_listing:
+        st.info("Click a marker to load its full details here.")
+    else:
+        st.markdown(format_popup_html(selected_listing), unsafe_allow_html=True)
+        listing_id_value = selected_listing.get("listing_id")
+        if listing_id_value:
+            st.caption(f"Listing ID: {listing_id_value}")
 
-st.caption("Tip: When zoomed out, the map uses fast clustering for better performance. Zoom in to see detailed house icons with full attribute data. Use the layer control to toggle different housing types.")
+st.caption("Tip: The map now uses a lightweight dataset for rendering. Click any marker to load full details in the left panel without reloading the map.")
 

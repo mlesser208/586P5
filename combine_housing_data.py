@@ -16,6 +16,7 @@ Run this with your ArcGIS Pro Python or any Python 3 environment with pandas ins
 
 import pandas as pd
 from pathlib import Path
+from typing import Tuple
 
 # ---------------------------------------------------------
 # CONFIG – CHANGE THESE FOR YOUR COMPUTER
@@ -30,6 +31,8 @@ LAHD_PATH = r"LAHD_Affordable_Housing_Projects_Catalog_And_Listing_20251124.csv"
 # Output folder + file name
 OUTPUT_FOLDER = r"project5_outputs"
 OUTPUT_FILENAME = "combined_housing_west_la.csv"
+LOCATIONS_FILENAME = "housing_locations.csv"
+DETAILS_FILENAME = "housing_details.csv"
 
 # Tag everything with your study area
 STUDY_AREA = "West LA"   # or "Redondo Beach" if you switch later
@@ -231,6 +234,55 @@ def load_lahd(lahd_path: str) -> pd.DataFrame:
 # Combine + export
 # ---------------------------------------------------------
 
+def write_split_outputs(combined_df: pd.DataFrame, out_folder: Path) -> Tuple[Path, Path]:
+    """
+    Purpose: Writes the combined dataset into separate location-only and detail CSV files.
+
+    Parameters:
+        combined_df (pd.DataFrame): DataFrame containing the unified housing data. Must include
+                                    listing_id, lat, and lon columns.
+        out_folder (Path): Folder where the split CSV files will be stored.
+
+    Return Value:
+        Tuple[Path, Path]: Paths to the locations CSV and details CSV, respectively.
+
+    Exceptions:
+        KeyError: Raised if listing_id, lat, or lon columns are missing.
+        PermissionError: Raised if the files cannot be written due to permission issues.
+        OSError: Raised for other filesystem-related errors during file writes.
+    """
+    required_cols = {"listing_id", "lat", "lon"}
+    missing = required_cols - set(combined_df.columns)
+    if missing:
+        raise KeyError(f"Combined dataset is missing required columns: {missing}")
+
+    # Prepare location-only subset
+    location_cols = ["listing_id", "lat", "lon"]
+    optional_cols = [col for col in ["source", "study_area"] if col in combined_df.columns]
+    all_location_cols = location_cols + optional_cols
+
+    locations_df = (
+        combined_df.loc[:, all_location_cols]
+        .copy()
+    )
+    locations_df["listing_id"] = locations_df["listing_id"].astype(str)
+    locations_df["lat"] = pd.to_numeric(locations_df["lat"], errors="coerce")
+    locations_df["lon"] = pd.to_numeric(locations_df["lon"], errors="coerce")
+    locations_df = locations_df.dropna(subset=["lat", "lon"])
+    locations_df = locations_df[(locations_df["lat"] != 0) & (locations_df["lon"] != 0)]
+
+    locations_path = out_folder / LOCATIONS_FILENAME
+    locations_df.to_csv(locations_path, index=False)
+
+    # Write detail dataset (full schema)
+    details_df = combined_df.copy()
+    details_df["listing_id"] = details_df["listing_id"].astype(str)
+    details_path = out_folder / DETAILS_FILENAME
+    details_df.to_csv(details_path, index=False)
+
+    return locations_path, details_path
+
+
 def build_combined_dataset() -> Path:
     """
     Purpose: Combines Airbnb and LAHD datasets into a single standardized CSV file.
@@ -259,6 +311,10 @@ def build_combined_dataset() -> Path:
 
     combined_df.to_csv(out_path, index=False)
     print(f"\nWrote combined dataset to:\n{out_path}")
+
+    locations_path, details_path = write_split_outputs(combined_df, out_folder)
+    print(f"Wrote location-only dataset to:\n{locations_path}")
+    print(f"Wrote detail dataset to:\n{details_path}")
 
     return out_path
 
