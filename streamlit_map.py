@@ -299,7 +299,7 @@ def format_popup_html(row: Union[pd.Series, Mapping[str, Any]]) -> str:
         pass
     
     # Beds/Baths
-    bed_bath = []
+    bed_bath: List[str] = []
     beds_value = data.get("beds")
     baths_value = data.get("baths")
     if pd.notna(beds_value) and str(beds_value).strip():
@@ -326,7 +326,11 @@ def format_popup_html(row: Union[pd.Series, Mapping[str, Any]]) -> str:
     
     return "<br>".join(tooltip_parts)
 
-def create_map_lightweight(locations_table: pd.DataFrame, initial_zoom: Optional[int] = None):
+def create_map_lightweight(
+    locations_table: pd.DataFrame,
+    initial_zoom: Optional[float] = None,
+    map_center: Optional[List[float]] = None
+) -> folium.Map:
     """
     Purpose: Creates a Folium map with lightweight markers for efficient rendering when zoomed out.
              Uses FastMarkerCluster for better performance with large datasets.
@@ -334,7 +338,9 @@ def create_map_lightweight(locations_table: pd.DataFrame, initial_zoom: Optional
     Parameters:
         locations_table (pd.DataFrame): DataFrame containing housing units with valid coordinates.
                                 Expected columns: listing_id, lat, lon, and optional metadata.
-        initial_zoom (int): Current zoom level of the map. If None, uses default zoom_start.
+        initial_zoom (float): Current zoom level of the map. If None, uses default zoom_start.
+        map_center (List[float]): Latitude/longitude pair representing the desired map center.
+                                   Defaults to downtown Los Angeles if not provided.
     
     Return Value:
         folium.Map: A Folium map object with lightweight markers and fast clustering.
@@ -342,9 +348,10 @@ def create_map_lightweight(locations_table: pd.DataFrame, initial_zoom: Optional
     Exceptions:
         KeyError: Raised if required columns (lat, lon) are missing from the DataFrame.
     """
-    zoom_start = initial_zoom if initial_zoom is not None else 11
+    zoom_start = int(initial_zoom) if initial_zoom is not None else 11
+    center_coords = map_center if map_center is not None else [LA_CENTER_LAT, LA_CENTER_LON]
     m = folium.Map(
-        location=[LA_CENTER_LAT, LA_CENTER_LON],
+        location=center_coords,
         zoom_start=zoom_start,
         tiles="OpenStreetMap"
     )
@@ -467,9 +474,11 @@ filtered_detail_lookup = filtered_details_unique.set_index("listing_id", drop=Fa
 
 # Initialize session state
 if "map_zoom" not in st.session_state:
-    st.session_state.map_zoom = 11
+    st.session_state.map_zoom = 11.0
 if "selected_listing_id" not in st.session_state:
     st.session_state.selected_listing_id = None
+if "map_center" not in st.session_state:
+    st.session_state.map_center = [LA_CENTER_LAT, LA_CENTER_LON]
 
 # Create and display map with side detail panel
 st.subheader("Map View")
@@ -485,18 +494,29 @@ with map_col:
         with st.spinner("Rendering fast map view (location-only data)..."):
             try:
                 current_zoom = st.session_state.map_zoom
-                map_obj = create_map_lightweight(filtered_locations, initial_zoom=current_zoom)
+                current_center = st.session_state.map_center
+                map_obj = create_map_lightweight(
+                    filtered_locations,
+                    initial_zoom=current_zoom,
+                    map_center=current_center
+                )
                 map_data = st_folium(
                     map_obj,
                     height=600,
-                    returned_objects=["last_object_clicked", "zoom"],
+                    returned_objects=["last_object_clicked", "zoom", "center"],
                     key="housing_map",
                     use_container_width=True
                 )
-                if map_data and "zoom" in map_data and map_data["zoom"] is not None:
-                    new_zoom = map_data["zoom"]
+                if map_data:
+                    new_zoom = map_data.get("zoom")
                     if isinstance(new_zoom, (float, int)):
                         st.session_state.map_zoom = float(new_zoom)
+                    new_center = map_data.get("center")
+                    if isinstance(new_center, Mapping):
+                        center_lat = new_center.get("lat")
+                        center_lon = new_center.get("lng")
+                        if isinstance(center_lat, (float, int)) and isinstance(center_lon, (float, int)):
+                            st.session_state.map_center = [float(center_lat), float(center_lon)]
             except (ValueError, KeyError, RuntimeError) as map_error:
                 map_data = None
                 st.error(f"Error creating map: {map_error}")

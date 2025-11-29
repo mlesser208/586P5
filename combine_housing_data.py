@@ -258,13 +258,8 @@ def write_split_outputs(combined_df: pd.DataFrame, out_folder: Path) -> Tuple[Pa
 
     # Prepare location-only subset
     location_cols = ["listing_id", "lat", "lon"]
-    optional_cols = [col for col in ["source", "study_area"] if col in combined_df.columns]
-    all_location_cols = location_cols + optional_cols
 
-    locations_df = (
-        combined_df.loc[:, all_location_cols]
-        .copy()
-    )
+    locations_df = combined_df.loc[:, location_cols].copy()
     locations_df["listing_id"] = locations_df["listing_id"].astype(str)
     locations_df["lat"] = pd.to_numeric(locations_df["lat"], errors="coerce")
     locations_df["lon"] = pd.to_numeric(locations_df["lon"], errors="coerce")
