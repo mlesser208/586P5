@@ -460,9 +460,10 @@ if "price" in filtered_details.columns and (price_min > 0 or price_max < 10000):
         ((filtered_details["price"] >= price_min) & (filtered_details["price"] <= price_max))
     ]
 
-filtered_ids = set(filtered_details["listing_id"])
+filtered_details_unique = filtered_details.drop_duplicates(subset="listing_id", keep="last")
+filtered_ids = set(filtered_details_unique["listing_id"])
 filtered_locations = locations_df[locations_df["listing_id"].isin(filtered_ids)]
-filtered_detail_lookup = filtered_details.set_index("listing_id", drop=False).to_dict(orient="index")
+filtered_detail_lookup = filtered_details_unique.set_index("listing_id", drop=False).to_dict(orient="index")
 
 # Initialize session state
 if "map_zoom" not in st.session_state:
