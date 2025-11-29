@@ -495,9 +495,8 @@ with map_col:
                 )
                 if map_data and "zoom" in map_data and map_data["zoom"] is not None:
                     new_zoom = map_data["zoom"]
-                    if new_zoom != st.session_state.map_zoom:
-                        st.session_state.map_zoom = new_zoom
-                        st.rerun()
+                    if isinstance(new_zoom, (float, int)):
+                        st.session_state.map_zoom = float(new_zoom)
             except (ValueError, KeyError, RuntimeError) as map_error:
                 map_data = None
                 st.error(f"Error creating map: {map_error}")
