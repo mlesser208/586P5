@@ -16,3 +16,4 @@ EXPOSE 8501
 # Start the Streamlit app when the container launches
 CMD ["streamlit", "run", "streamlit_map.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
+

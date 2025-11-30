@@ -93,8 +93,10 @@ def load_airbnb(listings_path: str) -> pd.DataFrame:
 
     df = pd.DataFrame()
 
-    df["source"] = "airbnb"
+    # Set listing_id first to establish the number of rows
     df["listing_id"] = df_raw["id"].astype(str)
+    # Now set source column with the correct number of rows (must match length)
+    df["source"] = ["airbnb"] * len(df)
     df["name"] = df_raw.get("name")
 
     # Airbnb often doesn't give full street address in the public dataset,
@@ -164,8 +166,7 @@ def load_lahd(lahd_path: str) -> pd.DataFrame:
     # print(df_raw.columns)  # uncomment once to see exact names
 
     df = pd.DataFrame()
-    df["source"] = "lahd_affordable"
-
+    
     # listing_id: use PROJECT NUMBER if it exists, otherwise fallback to index
     if "PROJECT NUMBER" in df_raw.columns:
         df["listing_id"] = df_raw["PROJECT NUMBER"].astype(str)
@@ -173,6 +174,9 @@ def load_lahd(lahd_path: str) -> pd.DataFrame:
         df["listing_id"] = df_raw["project_number"].astype(str)
     else:
         df["listing_id"] = df_raw.index.astype(str)
+    
+    # Set source column after listing_id to ensure correct number of rows (must match length)
+    df["source"] = ["lahd_affordable"] * len(df)
 
     # Name field
     name_col = None

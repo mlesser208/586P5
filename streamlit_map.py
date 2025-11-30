@@ -284,8 +284,8 @@ def format_popup_html(row: Union[pd.Series, Mapping[str, Any]]) -> str:
         tooltip_parts.append(f"<b>{name_value}</b>")
     
     # Source
-    source = data.get("source", "Unknown")
-    tooltip_parts.append(f"<i>Source: {source}</i>")
+    source_value = data.get("source", "Unknown")
+    tooltip_parts.append(f"<i>Source: {source_value}</i>")
     
     # Price
     price = data.get("price")
@@ -420,52 +420,161 @@ with st.spinner("Loading housing data..."):
         st.exception(load_error)
         st.stop()
 
-# Sidebar stats
-st.sidebar.header("Statistics")
-st.sidebar.metric("Total Units", f"{len(details_df):,}")
+# ============================================================
+# SIDEBAR: Overview & Statistics
+# ============================================================
+st.sidebar.title("📊 Dashboard Overview")
 
-# Check if source column exists and calculate counts safely
+# Calculate statistics
+# Handle source column - check for both "airbnb" and "lahd_affordable" or "lahd"
 if "source" in details_df.columns:
-    airbnb_count = len(details_df[details_df["source"].str.contains("airbnb", case=False, na=False)])
-    lahd_count = len(details_df[details_df["source"].str.contains("lahd", case=False, na=False)])
+    # Fill NaN values with empty string for string operations
+    source_series = details_df["source"].fillna("").astype(str)
+    airbnb_count = len(details_df[source_series.str.contains("airbnb", case=False, na=False)])
+    # Match both "lahd_affordable" and any source containing "lahd"
+    lahd_count = len(details_df[source_series.str.contains("lahd", case=False, na=False)])
 else:
     airbnb_count = 0
     lahd_count = 0
-    st.warning("'source' column not found in detail data")
+    st.sidebar.warning("⚠️ 'source' column not found in data. Please regenerate data files.")
 
-st.sidebar.metric("Airbnb Listings", f"{airbnb_count:,}")
-st.sidebar.metric("Affordable Housing", f"{lahd_count:,}")
+# Display key metrics in a visually appealing way
+st.sidebar.markdown("### 📈 Dataset Statistics")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    st.metric("Total Units", f"{len(details_df):,}", help="Total housing units in the dataset")
+with col2:
+    # Calculate percentage breakdown
+    if len(details_df) > 0:
+        airbnb_pct = (airbnb_count / len(details_df)) * 100
+        st.metric("Airbnb %", f"{airbnb_pct:.1f}%", help="Percentage of Airbnb listings")
 
-# Debug info (expandable)
-with st.sidebar.expander("Debug Info"):
-    st.write(f"**Detail columns:** {', '.join(details_df.columns.tolist())}")
-    st.write(f"**Detail shape:** {details_df.shape}")
-    st.write(f"**Location shape:** {locations_df.shape}")
-    if "source" in details_df.columns:
-        st.write(f"**Source values:** {details_df['source'].value_counts().to_dict()}")
+st.sidebar.markdown("---")
 
-# Filter options
-st.sidebar.header("Filters")
-show_airbnb = st.sidebar.checkbox("Show Airbnb Listings", value=True)
-show_lahd = st.sidebar.checkbox("Show Affordable Housing", value=True)
+# Source breakdown
+st.sidebar.markdown("### 🏠 Housing Sources")
 
+# Check if source column has valid data
+if "source" in details_df.columns:
+    source_non_null = details_df["source"].notna().sum()
+    if source_non_null == 0:
+        st.sidebar.error("⚠️ **Data Issue**: Source column is empty. Please regenerate data files by running: `python combine_housing_data.py`")
+    else:
+        st.sidebar.metric(
+            "Airbnb Listings", 
+            f"{airbnb_count:,}",
+            help="Short-term rental listings from InsideAirbnb dataset"
+        )
+        st.sidebar.metric(
+            "Affordable Housing", 
+            f"{lahd_count:,}",
+            help="Affordable housing projects from LAHD (Los Angeles Housing Department)"
+        )
+        
+        # Show other sources if they exist
+        source_series = details_df["source"].fillna("").astype(str)
+        other_sources = details_df[~source_series.str.contains("airbnb|lahd", case=False, na=False)]
+        if len(other_sources) > 0:
+            st.sidebar.metric("Other Sources", f"{len(other_sources):,}")
+else:
+    st.sidebar.error("⚠️ **Data Issue**: Source column missing. Please regenerate data files.")
+
+st.sidebar.markdown("---")
+
+# ============================================================
+# SIDEBAR: Map Filters
+# ============================================================
+st.sidebar.markdown("### 🔍 Map Filters")
+
+# Source type filters
+st.sidebar.markdown("**Display Options:**")
+show_airbnb = st.sidebar.checkbox(
+    "Show Airbnb Listings", 
+    value=True,
+    help="Toggle visibility of Airbnb listings on the map"
+)
+show_lahd = st.sidebar.checkbox(
+    "Show Affordable Housing", 
+    value=True,
+    help="Toggle visibility of affordable housing projects on the map"
+)
+
+# Apply source filters
 filtered_details = details_df.copy()
 if "source" in filtered_details.columns:
+    # Fill NaN values for string operations
+    source_series = filtered_details["source"].fillna("").astype(str)
     if not show_airbnb:
-        filtered_details = filtered_details[~filtered_details["source"].str.contains("airbnb", case=False, na=False)]
+        filtered_details = filtered_details[~source_series.str.contains("airbnb", case=False, na=False)]
     if not show_lahd:
-        filtered_details = filtered_details[~filtered_details["source"].str.contains("lahd", case=False, na=False)]
+        filtered_details = filtered_details[~source_series.str.contains("lahd", case=False, na=False)]
+
+st.sidebar.markdown("---")
 
 # Price filter
-st.sidebar.header("Price Range")
-price_min = st.sidebar.number_input("Min Price ($)", min_value=0, value=0, step=10)
-price_max = st.sidebar.number_input("Max Price ($)", min_value=0, value=10000, step=10)
+st.sidebar.markdown("### 💰 Price Range Filter")
+# Calculate price statistics for better defaults from filtered data (after source filter)
+if "price" in filtered_details.columns:
+    price_data = filtered_details["price"].dropna()
+    if len(price_data) > 0:
+        price_min_default = max(0, int(price_data.min()))
+        price_max_default = max(price_min_default + 100, int(price_data.max()))
+        price_median = int(price_data.median())
+        price_mean = int(price_data.mean())
+    else:
+        price_min_default = 0
+        price_max_default = 10000
+        price_median = 0
+        price_mean = 0
+else:
+    price_min_default = 0
+    price_max_default = 10000
+    price_median = 0
+    price_mean = 0
 
+price_min = st.sidebar.number_input(
+    "Minimum Price ($)", 
+    min_value=0, 
+    value=price_min_default, 
+    step=50,
+    help="Filter out listings below this price"
+)
+price_max = st.sidebar.number_input(
+    "Maximum Price ($)", 
+    min_value=price_min, 
+    value=price_max_default, 
+    step=50,
+    help="Filter out listings above this price"
+)
+
+# Show price statistics for currently filtered data
+if "price" in filtered_details.columns:
+    price_data = filtered_details["price"].dropna()
+    if len(price_data) > 0:
+        st.sidebar.caption(f"💰 Median: ${price_median:,} | Mean: ${price_mean:,}")
+
+# Apply price filter
 if "price" in filtered_details.columns and (price_min > 0 or price_max < 10000):
     filtered_details = filtered_details[
         (filtered_details["price"].isna()) | 
         ((filtered_details["price"] >= price_min) & (filtered_details["price"] <= price_max))
     ]
+
+# Show filtered count
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"**Filtered Results:** {len(filtered_details):,} units")
+
+# Debug info (collapsible, less prominent)
+with st.sidebar.expander("🔧 Debug Information"):
+    st.write(f"**Detail columns:** {', '.join(details_df.columns.tolist())}")
+    st.write(f"**Detail shape:** {details_df.shape}")
+    st.write(f"**Location shape:** {locations_df.shape}")
+    st.write(f"**Filtered shape:** {filtered_details.shape}")
+    if "source" in details_df.columns:
+        st.write("**Source breakdown:**")
+        source_counts = details_df['source'].value_counts().to_dict()
+        for source_name, count in source_counts.items():
+            st.write(f"  - {source_name}: {count:,}")
 
 filtered_details_unique = filtered_details.drop_duplicates(subset="listing_id", keep="last")
 filtered_ids = set(filtered_details_unique["listing_id"])
