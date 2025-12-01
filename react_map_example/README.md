@@ -3,10 +3,10 @@
 This example shows how to create a Mapbox GL JS map **once** in React and update its data without forcing re-renders of the map container. The pattern mirrors how Apple Maps or Zillow feel responsive while minimizing unnecessary rebuilds.
 
 ## Key ideas implemented
-- **Single map instance:** The Mapbox map is created a single time with `useRef`. Changing props in React does not recreate the map container, and callbacks are stored in refs so passing a new `onLoad` function will not tear down the map.
+- **Single map instance:** The Mapbox map is created a single time with `useRef`. Changing props in React does not recreate the map container.
 - **Imperative data updates:** GeoJSON data is pushed directly into an existing source (`source.setData(...)`) instead of remounting the map or layers.
 - **Isolated lifecycle:** Map creation/removal happens in one effect; data updates live in a separate effect so UI state changes do not touch the map instance.
-- **Throttled callbacks:** Viewport change callbacks fire on `moveend/zoomend` with `requestAnimationFrame`, so your React state updates only after a pan or zoom settles (not every animation frame).
+- **Throttled callbacks:** Viewport change callbacks use `requestAnimationFrame` to avoid emitting React state changes on every frame.
 - **Stable options:** Initial `center`/`zoom` are captured once so parent re-renders do not reset the camera.
 
 ## Usage
@@ -59,4 +59,3 @@ export function App() {
 - Debounce or throttle network requests triggered by viewport changes (e.g., wait for `moveend` or throttle the `onMove` callback as shown).
 - Only update GeoJSON when the underlying data actually changes; compare hashes or timestamps if needed.
 - If you need markers instead of a GeoJSON layer, keep marker objects in refs and add/remove them imperatively just like the GeoJSON source.
-- If you pass callbacks like `onLoad` or `onMove`, prefer stable references (e.g., `useCallback`) so parent re-renders do not trigger unnecessary React work. The map itself keeps the latest callbacks via refs and does not rebuild.

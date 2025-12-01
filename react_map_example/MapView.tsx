@@ -13,10 +13,7 @@ type MapViewProps = {
   data: FeatureCollection;
   /** Optional: called when the map finishes loading. */
   onLoad?: (map: MapboxMap) => void;
-  /**
-   * Optional: called when the viewport changes. Triggered on `moveend`/`zoomend`
-   * to avoid firing every animation frame while the user is panning or zooming.
-   */
+  /** Optional: called with throttling when the viewport changes. */
   onMove?: (viewport: { center: [number, number]; zoom: number }) => void;
 };
 
@@ -33,12 +30,6 @@ export function MapView({ accessToken, center, zoom = 11, data, onLoad, onMove }
   const moveFrame = useRef<number | null>(null);
   const initialCenter = useRef<LngLatLike>(center);
   const initialZoom = useRef<number>(zoom);
-  const onLoadRef = useRef<MapViewProps["onLoad"]>(onLoad);
-
-  // Keep the latest callback without forcing the map to re-initialize.
-  useEffect(() => {
-    onLoadRef.current = onLoad;
-  }, [onLoad]);
 
   // Stable options so the map isn't recreated if props change.
   const mapOptions = useMemo(
@@ -84,14 +75,14 @@ export function MapView({ accessToken, center, zoom = 11, data, onLoad, onMove }
         });
       }
 
-      onLoadRef.current?.(map);
+      onLoad?.(map);
     });
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, [mapOptions]);
+  }, [mapOptions, onLoad]);
 
   // Imperatively update the GeoJSON source when data changes.
   useEffect(() => {
@@ -112,7 +103,7 @@ export function MapView({ accessToken, center, zoom = 11, data, onLoad, onMove }
     }
   }, [data]);
 
-  // Fire move callbacks after zoom/pan completes, avoiding per-frame renders.
+  // Throttle move events so they don't trigger React state updates on every frame.
   const handleMove = useCallback(() => {
     const map = mapRef.current;
     if (!map || !onMove) return;
@@ -128,11 +119,11 @@ export function MapView({ accessToken, center, zoom = 11, data, onLoad, onMove }
     const map = mapRef.current;
     if (!map || !onMove) return;
 
-    map.on("moveend", handleMove);
-    map.on("zoomend", handleMove);
+    map.on("move", handleMove);
+    map.on("zoom", handleMove);
     return () => {
-      map.off("moveend", handleMove);
-      map.off("zoomend", handleMove);
+      map.off("move", handleMove);
+      map.off("zoom", handleMove);
       if (moveFrame.current) cancelAnimationFrame(moveFrame.current);
     };
   }, [handleMove, onMove]);
