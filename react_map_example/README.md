@@ -6,7 +6,7 @@ This example shows how to create a Mapbox GL JS map **once** in React and update
 - **Single map instance:** The Mapbox map is created a single time with `useRef`. Changing props in React does not recreate the map container.
 - **Imperative data updates:** GeoJSON data is pushed directly into an existing source (`source.setData(...)`) instead of remounting the map or layers.
 - **Isolated lifecycle:** Map creation/removal happens in one effect; data updates live in a separate effect so UI state changes do not touch the map instance.
-- **Throttled callbacks:** Viewport change callbacks fire on `moveend/zoomend` with `requestAnimationFrame`, so your React state updates only after a pan or zoom settles (not every animation frame).
+- **Throttled callbacks:** Viewport change callbacks use `requestAnimationFrame` to avoid emitting React state changes on every frame.
 - **Stable options:** Initial `center`/`zoom` are captured once so parent re-renders do not reset the camera.
 
 ## Usage
